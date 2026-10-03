@@ -507,67 +507,50 @@ def render_thread(conn, thread_id):
         st.write(f"- [{e['field']}] \"{e['quote']}\"")
 
     st.subheader("Add a correction")
-    field = st.selectbox("Field", JUDGEMENT_FIELDS, key="corr_field")
-    new_value = st.selectbox("New priority", [1, 2, 3, 4], key="corr_priority") if field == "priority" \
-        else st.text_input("New value", key="corr_value")
-    reason = st.text_area("Reason for this change", key="corr_reason")
-    basis = st.radio("Basis", ["source_evidence", "human_input"], key="corr_basis")
+    st.write("**Step 1: What kind of error?**")
+    error_category = st.radio("Category of error", ["Wrongly Classified", "Something Else"], key="corr_error_cat")
 
-    evidence_message_id, evidence_source_field, evidence_quote = None, None, None
-    if basis == "source_evidence":
-        options = {f"{m['filename']} ({m['subject']})": m["id"] for m in messages if m["parse_status"] == "ok"}
-        chosen = st.selectbox("Source message", list(options.keys()), key="corr_msg")
-        evidence_message_id = options[chosen]
-        evidence_source_field = st.selectbox(
-            "Source field", ["body", "subject", "sender", "to", "cc", "sent_at", "attachment_name"],
-            key="corr_source_field",
+    if error_category == "Wrongly Classified":
+        st.write("**Step 2: What should the correct category be?**")
+        new_priority = st.selectbox(
+            "Correct priority",
+            [1, 2, 3, 4],
+            format_func=lambda x: PRIORITY_LABELS[x] if x in PRIORITY_LABELS else str(x),
+            key="corr_correct_priority"
         )
-        evidence_quote = st.text_input("Exact quote supporting this change", key="corr_quote")
+    else:
+        new_priority = eff["priority"]
 
-    if st.button("Save correction"):
-        coerced_new = _coerce(field, new_value)
-        if field == "priority" and coerced_new not in (1, 2, 3, 4):
-            st.error("Priority correction must be 1, 2, 3, or 4. Not saved.")
+    st.write("**Step 3: Why was it wrong?**")
+    description = st.text_area(
+        "Describe the issue (this will help classify similar emails correctly)",
+        placeholder="E.g., 'Promotional deadline, no executive action needed'",
+        key="corr_description"
+    )
+
+    if st.button("Save correction", key="save_corr_btn"):
+        if not description.strip():
+            st.error("Please provide a description.")
             st.stop()
 
-        matched_segment_id = None
-        matched_start = None
-        if basis == "source_evidence":
-            text, seg_idx, start = _find_source_quote(
-                conn, evidence_message_id, evidence_source_field, evidence_quote
-            )
-            if text is None:
-                st.error("That quote was not found verbatim in the selected source. Not saved.")
-                st.stop()
-            matched_segment_id = (
-                next((s["id"] for s in store.list_segments_by_message(conn, evidence_message_id) if s["idx"] == seg_idx), None)
-                if seg_idx is not None
-                else None
-            )
-            matched_start = start
-
         now_iso = datetime.now(timezone.utc).isoformat()
-        correction_id = hashlib.sha1(f"{judgement['id']}:{field}:{now_iso}".encode()).hexdigest()
+        correction_id = hashlib.sha1(f"{judgement['id']}:{now_iso}".encode()).hexdigest()
+
+        # For P3: always storing as priority correction
         store.insert_correction(conn, {
-            "id": correction_id, "judgement_id": judgement["id"], "field": field,
-            "old_value": json.dumps(eff.get(field), ensure_ascii=False) if isinstance(eff.get(field), (dict, list)) else str(eff.get(field)),
-            "new_value": json.dumps(coerced_new, ensure_ascii=False) if isinstance(coerced_new, (dict, list)) else str(coerced_new),
-            "reason": reason, "basis": basis,
+            "id": correction_id,
+            "judgement_id": judgement["id"],
+            "field": "priority",
+            "old_value": str(eff.get("priority")),
+            "new_value": str(new_priority),
+            "reason": description,
+            "basis": "human_input",
+            "error_category": "wrongly_classified" if error_category == "Wrongly Classified" else "other",
+            "semantic_summary": f"Changed from Priority {eff['priority']} to {new_priority}: {description[:100]}",
             "created_at": now_iso,
         })
-        if basis == "source_evidence":
-            end = matched_start + len(evidence_quote)
-            evidence_pk = hashlib.sha1(
-                f"{correction_id}:{evidence_message_id}:{matched_segment_id}:{evidence_source_field}:{matched_start}:{end}".encode()
-            ).hexdigest()
-            store.insert_evidence_span(conn, {
-                "id": evidence_pk,
-                "judgement_id": None, "correction_id": correction_id, "message_id": evidence_message_id,
-                "segment_id": matched_segment_id, "source_field": evidence_source_field, "field": field,
-                "quote": evidence_quote, "start_offset": matched_start, "end_offset": end,
-            })
         conn.commit()
-        st.session_state["toast_success"] = "Correction saved."
+        st.session_state["toast_success"] = "✅ Correction saved. It will help classify similar emails."
         st.rerun()
 
 

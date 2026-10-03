@@ -82,6 +82,8 @@ CREATE TABLE IF NOT EXISTS correction (
     new_value TEXT,
     reason TEXT,
     basis TEXT NOT NULL CHECK (basis IN ('source_evidence','human_input')),
+    error_category TEXT CHECK (error_category IN ('wrongly_classified','other')),
+    semantic_summary TEXT,
     created_at TEXT NOT NULL
 );
 """
@@ -93,6 +95,13 @@ def connect(db_path: str) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
+    # Migration: add P3 correction fields if they don't exist
+    try:
+        conn.execute("SELECT error_category FROM correction LIMIT 1")
+    except:
+        conn.execute("ALTER TABLE correction ADD COLUMN error_category TEXT CHECK (error_category IN ('wrongly_classified','other'))")
+        conn.execute("ALTER TABLE correction ADD COLUMN semantic_summary TEXT")
+        conn.commit()
     return conn
 
 
@@ -257,8 +266,8 @@ def list_evidence_for_correction(conn, correction_id):
 
 def insert_correction(conn, row: dict):
     conn.execute(
-        """INSERT INTO correction (id, judgement_id, field, old_value, new_value, reason, basis, created_at)
-           VALUES (:id, :judgement_id, :field, :old_value, :new_value, :reason, :basis, :created_at)""",
+        """INSERT INTO correction (id, judgement_id, field, old_value, new_value, reason, basis, error_category, semantic_summary, created_at)
+           VALUES (:id, :judgement_id, :field, :old_value, :new_value, :reason, :basis, :error_category, :semantic_summary, :created_at)""",
         row,
     )
 
