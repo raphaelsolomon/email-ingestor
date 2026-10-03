@@ -7,6 +7,7 @@ now" demo button below, which calls judge.py directly so a reviewer
 can trigger a judge pass without leaving the browser — the same call
 app.py already makes from the CLI, just reachable from the UI too.
 """
+# Cache refresh trigger
 
 import hashlib
 import json
@@ -452,8 +453,15 @@ def render_queue(conn):
     if rows["unjudged"]:
         st.subheader("⏳ Not yet judged")
         for e in rows["unjudged"]:
-            with st.expander(e["topic"]["subject"]):
-                st.caption(f"{e['thread_count']} thread(s) waiting for judgment")
+            with st.expander(f"{e['topic']['subject']} ({e['thread_count']} thread(s))"):
+                st.write(f"**From:** {e['topic']['sender']}")
+                for thread_id in e["topic"]["thread_ids"]:
+                    msgs = store.list_messages_by_thread(conn, thread_id)
+                    if msgs and any(m["parse_status"] == "ok" for m in msgs):
+                        thread_subject = msgs[-1]["subject"]
+                        if st.button(thread_subject, key=f"q_{thread_id}_uj"):
+                            st.session_state.selected_thread_id = thread_id
+                            st.rerun()
 
 
 def render_thread(conn, thread_id):
