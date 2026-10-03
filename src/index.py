@@ -185,34 +185,82 @@ def render_highlighted(text: str, quotes: list) -> str:
 
 
 def queue_rows(conn):
-    # Buckets every active (non-superseded) thread into one of five
-    # groups, so the Queue screen can show "what needs attention" and
-    # "what's just reference" as two separate lists.
-    rows = {"alerts": [], "reference": [], "needs_evidence": [], "unreadable": [], "unjudged": []}
-    for thread in store.list_active_threads(conn):
-        messages = store.list_messages_by_thread(conn, thread["id"])
-        if not messages or not any(m["parse_status"] == "ok" for m in messages):
-            if messages:
-                m = messages[0]
-                rows["unreadable"].append({"thread": thread, "filename": m["filename"], "error": m["parse_error"]})
-            else:
-                rows["unreadable"].append({"thread": thread, "filename": "(none)", "error": "thread has no messages"})
+    # Group threads into topics and categorize by priority and review status.
+    rows = {
+        "priority_1": [],
+        "priority_2": [],
+        "priority_3": [],
+        "priority_4": [],
+        "uncertain": [],
+        "unreadable": [],
+        "unjudged": [],
+    }
+    for topic in store.list_topics(conn):
+        topic_threads = []
+        topic_unjudged = 0
+        topic_unreadable = 0
+        all_judgements = []
+        all_effective = []
+
+        for thread_id in topic["thread_ids"]:
+            messages = store.list_messages_by_thread(conn, thread_id)
+            if not messages or not any(m["parse_status"] == "ok" for m in messages):
+                topic_unreadable += 1
+                continue
+
+            judgement = store.latest_judgement_for_thread(conn, thread_id)
+            if judgement is None:
+                topic_unjudged += 1
+                continue
+
+            eff = effective_judgement(conn, judgement)
+            all_judgements.append(judgement)
+            all_effective.append(eff)
+            topic_threads.append({
+                "thread": store.get_thread(conn, thread_id),
+                "judgement": judgement,
+                "effective": eff,
+                "subject": messages[-1]["subject"],
+            })
+
+        if topic_unreadable == len(topic["thread_ids"]):
+            for thread_id in topic["thread_ids"]:
+                msgs = store.list_messages_by_thread(conn, thread_id)
+                if msgs:
+                    m = msgs[0]
+                    rows["unreadable"].append({
+                        "topic": topic,
+                        "filename": m["filename"],
+                        "error": m["parse_error"],
+                    })
             continue
 
-        judgement = store.latest_judgement_for_thread(conn, thread["id"])
-        if judgement is None:
-            rows["unjudged"].append({"thread": thread, "subject": messages[-1]["subject"]})
+        if not topic_threads:
+            if topic_unjudged > 0:
+                rows["unjudged"].append({"topic": topic, "thread_count": topic_unjudged})
             continue
 
-        eff = effective_judgement(conn, judgement)
-        entry = {"thread": thread, "judgement": judgement, "effective": eff, "subject": messages[-1]["subject"]}
+        max_priority = min([e["priority"] for e in all_effective if e["priority"]])
+        has_uncertain = any(j["review_status"] == "needs_evidence" for j in all_judgements)
 
-        if judgement["review_status"] == "needs_evidence":
-            rows["needs_evidence"].append(entry)
-        elif eff["priority"] in (1, 2):
-            rows["alerts"].append(entry)
+        topic_entry = {
+            "topic": topic,
+            "threads": topic_threads,
+            "max_priority": max_priority,
+            "has_uncertain": has_uncertain,
+        }
+
+        if has_uncertain:
+            rows["uncertain"].append(topic_entry)
+        elif max_priority == 1:
+            rows["priority_1"].append(topic_entry)
+        elif max_priority == 2:
+            rows["priority_2"].append(topic_entry)
+        elif max_priority == 3:
+            rows["priority_3"].append(topic_entry)
         else:
-            rows["reference"].append(entry)
+            rows["priority_4"].append(topic_entry)
+
     return rows
 
 
@@ -336,44 +384,76 @@ def render_queue(conn):
     render_upload(conn)
     rows = queue_rows(conn)
 
-    st.subheader("Alerts (Priority 1-2)")
-    if not rows["alerts"]:
-        st.caption("None.")
-    for e in rows["alerts"]:
-        label = f"{PRIORITY_LABELS[e['effective']['priority']]} — {e['subject']} (who: {e['effective']['who']})"
-        if st.button(label, key=f"q_{e['thread']['id']}"):
-            st.session_state.selected_thread_id = e["thread"]["id"]
-            st.rerun()
+    def render_priority_section(title, topics, show_alert=False):
+        st.subheader(title)
+        if not topics:
+            st.caption("None.")
+            return
+        for topic_entry in topics:
+            topic = topic_entry["topic"]
+            topic_label = f"{topic['subject']}" + (f" ({len(topic_entry['threads'])} thread(s))" if len(topic_entry['threads']) > 1 else "")
 
-    st.subheader("Reference / Filter (Priority 3-4)")
-    if not rows["reference"]:
-        st.caption("None.")
-    for e in rows["reference"]:
-        label = f"{PRIORITY_LABELS[e['effective']['priority']]} — {e['subject']}: {e['judgement']['reason']}"
-        if st.button(label, key=f"q_{e['thread']['id']}"):
-            st.session_state.selected_thread_id = e["thread"]["id"]
-            st.rerun()
+            if show_alert and topic_entry["threads"]:
+                first_eff = topic_entry["threads"][0]["effective"]
+                alert_preview = ""
+                if first_eff.get("who"):
+                    alert_preview += f"Who: {first_eff['who']} | "
+                if first_eff.get("action"):
+                    alert_preview += f"Action: {first_eff['action']}"
+                if alert_preview:
+                    alert_preview = alert_preview.rstrip(" | ")
+                    topic_label += f"\n{alert_preview}"
 
-    st.subheader("Needs evidence")
-    if not rows["needs_evidence"]:
-        st.caption("None.")
-    for e in rows["needs_evidence"]:
-        if st.button(f"{e['subject']} — {e['judgement']['uncertainty']}", key=f"q_{e['thread']['id']}"):
-            st.session_state.selected_thread_id = e["thread"]["id"]
-            st.rerun()
+            with st.expander(topic_label, expanded=False):
+                st.write(f"**From:** {topic['sender']}")
+                if show_alert and topic_entry["threads"]:
+                    first_eff = topic_entry["threads"][0]["effective"]
+                    if first_eff.get("who"):
+                        st.write(f"- **Who:** {first_eff['who']}")
+                    if first_eff.get("what"):
+                        st.write(f"- **What:** {first_eff['what']}")
+                    if first_eff.get("why"):
+                        st.write(f"- **Why:** {first_eff['why']}")
+                    if first_eff.get("action"):
+                        st.write(f"- **Action:** {first_eff['action']}")
+                    if first_eff.get("deadline"):
+                        st.write(f"- **Deadline:** {first_eff['deadline']}")
 
-    st.subheader("Unreadable files")
+                st.write(f"**{len(topic_entry['threads'])} thread(s):**")
+                for t in topic_entry["threads"]:
+                    if st.button(t["subject"], key=f"q_{t['thread']['id']}"):
+                        st.session_state.selected_thread_id = t["thread"]["id"]
+                        st.rerun()
+
+    render_priority_section("🚨 1. Immediate Attention", rows["priority_1"], show_alert=True)
+    render_priority_section("⚠️ 2. Action / Decision Required Today", rows["priority_2"], show_alert=True)
+    render_priority_section("📖 3. Reference / Observation", rows["priority_3"], show_alert=False)
+    render_priority_section("🔕 4. Filter / No Executive Attention", rows["priority_4"], show_alert=False)
+
+    st.subheader("❓ Uncertain")
+    if not rows["uncertain"]:
+        st.caption("None.")
+    else:
+        for topic_entry in rows["uncertain"]:
+            topic = topic_entry["topic"]
+            with st.expander(f"{topic['subject']} — {topic_entry['threads'][0]['judgement'].get('uncertainty', 'unclear')}"):
+                for t in topic_entry["threads"]:
+                    if st.button(t["subject"], key=f"q_{t['thread']['id']}_unc"):
+                        st.session_state.selected_thread_id = t["thread"]["id"]
+                        st.rerun()
+
+    st.subheader("⚠️ Unreadable / Erroneous Files")
     if not rows["unreadable"]:
         st.caption("None.")
-    for e in rows["unreadable"]:
-        st.write(f"- {e['filename']}: {e['error']}")
+    else:
+        for e in rows["unreadable"]:
+            st.write(f"- {e['filename']}: {e['error']}")
 
     if rows["unjudged"]:
-        st.subheader("Not yet judged")
+        st.subheader("⏳ Not yet judged")
         for e in rows["unjudged"]:
-            if st.button(e["subject"], key=f"q_{e['thread']['id']}"):
-                st.session_state.selected_thread_id = e["thread"]["id"]
-                st.rerun()
+            with st.expander(e["topic"]["subject"]):
+                st.caption(f"{e['thread_count']} thread(s) waiting for judgment")
 
 
 def render_thread(conn, thread_id):

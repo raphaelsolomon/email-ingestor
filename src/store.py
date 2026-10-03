@@ -267,3 +267,26 @@ def list_corrections_for_judgement(conn, judgement_id):
     return conn.execute(
         "SELECT * FROM correction WHERE judgement_id = ? ORDER BY created_at", (judgement_id,)
     ).fetchall()
+
+
+def list_topics(conn):
+    """Group active threads by (sender, normalized_subject). Returns [{topic_key, sender, subject, thread_ids, threads}, ...]"""
+    topics_dict = {}
+    for thread in list_active_threads(conn):
+        messages = list_messages_by_thread(conn, thread["id"])
+        if not messages:
+            continue
+        sender = messages[0]["sender"] or "unknown"
+        subject = thread["normalized_subject"] or "(no subject)"
+        topic_key = f"{sender}|{subject}"
+        if topic_key not in topics_dict:
+            topics_dict[topic_key] = {
+                "topic_key": topic_key,
+                "sender": sender,
+                "subject": subject,
+                "thread_ids": [],
+                "threads": [],
+            }
+        topics_dict[topic_key]["thread_ids"].append(thread["id"])
+        topics_dict[topic_key]["threads"].append(thread)
+    return list(topics_dict.values())
