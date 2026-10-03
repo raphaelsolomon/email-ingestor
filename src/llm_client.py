@@ -90,19 +90,26 @@ def _client() -> anthropic.Client:
 
 def judge_thread(packet: dict, model: str = os.getenv("ANTHROPIC_MODEL")) -> dict:
     client = _client()
-    response = client.messages.create(
-        model=model,
-        max_tokens=2000,
-        system=SYSTEM_PROMPT,
-        tools=[{
+    # kimi-k3 always thinks, and a named tool_choice ("specified") is rejected
+    # while thinking is on. "any" forces the single judgement tool without naming it.
+    kimi = bool(model) and model.lower().startswith("kimi")
+    request = {
+        "model": model,
+        "max_tokens": 16000 if kimi else 2000,
+        "system": SYSTEM_PROMPT,
+        "tools": [{
             "name": JUDGEMENT_TOOL_NAME,
             "description": "Record the draft judgement for the thread",
             "input_schema": JUDGEMENT_TOOL_SCHEMA,
         }],
-        extra_body={"reasoning_split": True},
-        tool_choice={"type": "tool", "name": JUDGEMENT_TOOL_NAME},
-        messages=[{"role": "user", "content": json.dumps(packet, ensure_ascii=False, indent=2)}]
-    )
+        "tool_choice": (
+            {"type": "any"} if kimi else {"type": "tool", "name": JUDGEMENT_TOOL_NAME}
+        ),
+        "messages": [{"role": "user", "content": json.dumps(packet, ensure_ascii=False, indent=2)}],
+    }
+    if not kimi:
+        request["extra_body"] = {"reasoning_split": True}
+    response = client.messages.create(**request)
     tool_use =next((b for b in response.content if b.type == "tool_use"), None)
     if tool_use is None:
         raise RuntimeError("LLM Model did not return a tool_use block with the judgement.")
