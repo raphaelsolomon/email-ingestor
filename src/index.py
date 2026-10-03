@@ -243,7 +243,10 @@ def queue_rows(conn):
                 rows["unjudged"].append({"topic": topic, "thread_count": topic_unjudged})
             continue
 
-        max_priority = min([e["priority"] for e in all_effective if e["priority"]])
+        valid_priorities = [e["priority"] for e in all_effective if e["priority"] is not None and e["priority"] > 0]
+        if not valid_priorities:
+            continue
+        max_priority = min(valid_priorities)
         has_uncertain = any(j["review_status"] == "needs_evidence" for j in all_judgements)
 
         topic_entry = {
@@ -439,7 +442,8 @@ def render_queue(conn):
     else:
         for topic_entry in rows["uncertain"]:
             topic = topic_entry["topic"]
-            with st.expander(f"{topic['subject']} — {topic_entry['threads'][0]['judgement'].get('uncertainty', 'unclear')}"):
+            uncertainty = topic_entry["threads"][0]["judgement"]["uncertainty"] or "unclear"
+            with st.expander(f"{topic['subject']} — {uncertainty}"):
                 for t in topic_entry["threads"]:
                     if st.button(t["subject"], key=f"q_{t['thread']['id']}_unc"):
                         st.session_state.selected_thread_id = t["thread"]["id"]
