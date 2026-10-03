@@ -93,6 +93,7 @@ def judge_thread(packet: dict, model: str = os.getenv("ANTHROPIC_MODEL")) -> dic
     # kimi-k3 always thinks, and a named tool_choice ("specified") is rejected
     # while thinking is on. "any" forces the single judgement tool without naming it.
     kimi = bool(model) and model.lower().startswith("kimi")
+    minimax = bool(model) and model.lower().startswith("minimax")
     request = {
         "model": model,
         "max_tokens": 16000 if kimi else 2000,
@@ -107,7 +108,8 @@ def judge_thread(packet: dict, model: str = os.getenv("ANTHROPIC_MODEL")) -> dic
         ),
         "messages": [{"role": "user", "content": json.dumps(packet, ensure_ascii=False, indent=2)}],
     }
-    if not kimi:
+    # reasoning_split is Anthropic-specific; don't add it for MiniMax
+    if not kimi and not minimax:
         request["extra_body"] = {"reasoning_split": True}
     response = client.messages.create(**request)
     tool_use =next((b for b in response.content if b.type == "tool_use"), None)

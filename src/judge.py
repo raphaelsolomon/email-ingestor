@@ -1,13 +1,16 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env with override=True to ensure environment variables are set correctly
+load_dotenv(Path(__file__).parent.parent / ".env", override=True)
+
 import llm_client
 import hashlib
 import json
 from datetime import datetime, timezone
 from dateutil import parser as dateparser
 import store
-from pathlib import Path
-import os
-from dotenv import load_dotenv
-load_dotenv()
 
 
 

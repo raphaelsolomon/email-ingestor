@@ -7,24 +7,26 @@ now" demo button below, which calls judge.py directly so a reviewer
 can trigger a judge pass without leaving the browser — the same call
 app.py already makes from the CLI, just reachable from the UI too.
 """
-# Cache refresh trigger
 
-import hashlib
-import json
 import os
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env BEFORE importing other modules so they can access environment variables
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_ROOT / ".env", override=True)
+
+# Now import after .env is loaded
+import hashlib
+import json
+from datetime import datetime, timezone
 
 import streamlit as st
-from dotenv import load_dotenv
 
 import ingest
 import judge
 import store
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(PROJECT_ROOT / ".env")
 
 FALLBACK_EMAILS_DIR = PROJECT_ROOT / "Emails"
 FALLBACK_DB_PATH = str(PROJECT_ROOT / "data" / "mailing.db")
