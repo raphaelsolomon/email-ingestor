@@ -258,11 +258,58 @@ class ParsedMessage:
 def parse_msg_file(path: Path) -> ParsedMessage:
     filename = path.name
     if path.stat().st_size == 0:
-        return ParsedMessage(filename=filename, parse_status="empty", parse_error="Empty file - (O bytes)")
-        
-    # open the actual message file
+        return ParsedMessage(filename=filename, parse_status="empty", parse_error="Empty file - (0 bytes)")
+
+    # open the actual message file (handles both .msg and .eml)
     try:
-        msg = extract_msg.openMsg(path)
+        if path.suffix.lower() == ".eml":
+            from email import message_from_file
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                msg = message_from_file(f)
+            # Wrap EML message to have extract_msg-like API
+            class EMLWrapper:
+                def __init__(self, email_msg):
+                    self._msg = email_msg
+                @property
+                def subject(self):
+                    return self._msg.get("Subject", "")
+                @property
+                def sender(self):
+                    return self._msg.get("From", "")
+                @property
+                def to(self):
+                    return self._msg.get("To", "")
+                @property
+                def cc(self):
+                    return self._msg.get("Cc", "")
+                @property
+                def body(self):
+                    return self._msg.get_payload() if isinstance(self._msg.get_payload(), str) else ""
+                @property
+                def date(self):
+                    try:
+                        from email.utils import parsedate_to_datetime
+                        date_str = self._msg.get("Date", "")
+                        return parsedate_to_datetime(date_str) if date_str else None
+                    except:
+                        return None
+                @property
+                def messageId(self):
+                    return self._msg.get("Message-ID", "")
+                @property
+                def inReplyTo(self):
+                    return self._msg.get("In-Reply-To")
+                @property
+                def header(self):
+                    return self._msg
+                @property
+                def attachments(self):
+                    return []
+                def close(self):
+                    pass
+            msg = EMLWrapper(msg)
+        else:
+            msg = extract_msg.openMsg(path)
     except Exception as e:
         return ParsedMessage(filename=filename, parse_status="corrupt", parse_error=str(e))
         
@@ -451,7 +498,10 @@ def _group_messages(messages: list) -> list:
     return groups
 
 def run_ingest(emails_dir: str, db_path: str) -> dict:
-    paths = sorted(Path(emails_dir).glob("*.msg"))
+    # Glob both .msg and .eml files
+    msg_paths = sorted(Path(emails_dir).glob("*.msg"))
+    eml_paths = sorted(Path(emails_dir).glob("*.eml"))
+    paths = sorted(msg_paths + eml_paths)
 
     conn = store.connect(db_path)
     now = datetime.now(timezone.utc).isoformat()
