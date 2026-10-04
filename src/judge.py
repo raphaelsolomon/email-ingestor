@@ -47,6 +47,27 @@ def build_packet(conn, thread_id: str) -> tuple:
                 for s in segments
             ]
         })
+
+    # Collect past human corrections (from all threads) to learn from
+    # Focus on high-confidence corrections (error_category = wrongly_classified)
+    past_corrections = []
+    all_corrections = conn.execute(
+        """SELECT c.* FROM correction c
+           JOIN judgement j ON c.judgement_id = j.id
+           WHERE c.error_category = 'wrongly_classified'
+           ORDER BY c.created_at DESC
+           LIMIT 10"""
+    ).fetchall()
+    for corr in all_corrections:
+        if corr["field"] == "priority":
+            past_corrections.append({
+                "field": corr["field"],
+                "old_value": corr["old_value"],
+                "new_value": corr["new_value"],
+                "reason": corr["reason"],
+                "semantic_summary": corr["semantic_summary"],
+            })
+
     packet = {
         "thread": {
             "grouping_basis": thread["grouping_basis"],
@@ -55,6 +76,8 @@ def build_packet(conn, thread_id: str) -> tuple:
         },
         "messages": packet_messages,
     }
+    if past_corrections:
+        packet["past_corrections"] = past_corrections
     return packet, ref_map
 
 def _source_text(conn, message_id: str, source_field: str, segment_index):

@@ -78,6 +78,10 @@ assertion. Deadline should only be filled when the thread states a time; otherwi
 Judge the thread as of its own latest message's sent date, not as of today - a March thread is not urgent just \
 because it is being reviewed later.
 
+If the input includes a "past_corrections" array, these are human-approved corrections from previous threads in \
+the same conversation. Use the semantic_summary from each past correction to inform similar classifications: they \
+reveal what Jacky values and how to distinguish priority levels in practice.
+
 Call record_judgement exactly once."""
 
 def _client() -> anthropic.Client:
