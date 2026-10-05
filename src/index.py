@@ -399,17 +399,6 @@ def render_queue(conn):
             topic = topic_entry["topic"]
             topic_label = f"{topic['subject']}" + (f" ({len(topic_entry['threads'])} thread(s))" if len(topic_entry['threads']) > 1 else "")
 
-            if show_alert and topic_entry["threads"]:
-                first_eff = topic_entry["threads"][0]["effective"]
-                alert_preview = ""
-                if first_eff.get("who"):
-                    alert_preview += f"Who: {first_eff['who']} | "
-                if first_eff.get("action"):
-                    alert_preview += f"Action: {first_eff['action']}"
-                if alert_preview:
-                    alert_preview = alert_preview.rstrip(" | ")
-                    topic_label += f"\n{alert_preview}"
-
             with st.expander(topic_label, expanded=False):
                 st.write(f"**From:** {topic['sender']}")
                 if show_alert and topic_entry["threads"]:
