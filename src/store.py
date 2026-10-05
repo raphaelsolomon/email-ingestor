@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS thread (
     id TEXT PRIMARY KEY,
     normalized_subject TEXT NOT NULL,
     grouping_basis TEXT NOT NULL CHECK (grouping_basis IN
-        ('conversation_id','references','duplicate_hash','subject_participants_time','single_message')),
+        ('conversation_id','references','duplicate_hash','subject_participants_time','keyword_overlap','single_message')),
     grouping_confidence TEXT NOT NULL CHECK (grouping_confidence IN ('exact','conservative')),
     grouping_uncertainty TEXT,
     superseded_at TEXT

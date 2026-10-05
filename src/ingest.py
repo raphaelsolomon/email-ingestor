@@ -398,6 +398,41 @@ def _participants(msg: ParsedMessage) -> set:
         addrs.add(sender_match.group(0).lower())
     return addrs
 
+def _extract_keywords(subject: str) -> set:
+    """Extract content words from a subject (lowercase, no stop words)"""
+    if not subject:
+        return set()
+    stop_words = {
+        'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+        'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'do', 'does', 'did',
+        're', 'fwd', 'fw', 'urgent', 'asap', 'today', 'need', 'needed', 'please', 'thanks',
+        'my', 'your', 'our', 'their', 'this', 'that', 'these', 'those', 'what', 'which', 'who',
+        'question', 'query', 'issue', 'problem', 'help', 'asking', 'ask', 'fyi', 'arrive'
+    }
+    # Synonym mapping for textile terms
+    synonyms = {'samples': 'swatch', 'swatches': 'swatch'}
+
+    words = set()
+    for w in subject.split():
+        # Strip all punctuation
+        w_clean = w.lower().strip('–—-:;,.\'"!?')
+        # Only keep words with 3+ letters
+        if len(w_clean) >= 3:
+            # Apply synonym normalization
+            w_final = synonyms.get(w_clean, w_clean)
+            words.add(w_final)
+    return words - stop_words
+
+def _keyword_overlap(subj_a: str, subj_b: str) -> float:
+    """Calculate keyword overlap ratio (0-1) between two subjects"""
+    keywords_a = _extract_keywords(subj_a)
+    keywords_b = _extract_keywords(subj_b)
+    if not keywords_a or not keywords_b:
+        return 0.0
+    overlap = keywords_a & keywords_b
+    total = keywords_a | keywords_b
+    return len(overlap) / len(total) if total else 0.0
+
 def _date_close(a_iso: str | None, b_iso: str | None) -> bool:
     """
         Check if two dates are close enough to be considered the same day
@@ -457,6 +492,9 @@ def _group_messages(messages: list) -> list:
                 a, b = candidates[i], candidates[j]
                 if dsu.find(a.id) == dsu.find(b.id):
                     continue
+                # Both emails must be from same sender to group by subject+participants+time
+                if a.sender != b.sender:
+                    continue
                 overlap = _participants(a) & _participants(b)
                 close_in_time = _date_close(a.sent_at, b.sent_at)
                 if overlap and close_in_time:
@@ -465,6 +503,25 @@ def _group_messages(messages: list) -> list:
                     reason = "no shared participant" if not overlap else "dates too far aparts"
                     uncertainty_notes[a.id] = f"same normalized subject as {b.filename} nut not merged ({reason})"
                     uncertainty_notes[b.id] = f"same normalized subject as {a.filename} nut not merged ({reason})"
+
+    joined_by_keyword = set()
+    for i in range(len(ok)):
+        for j in range(i+1, len(ok)):
+            a, b = ok[i], ok[j]
+            if dsu.find(a.id) == dsu.find(b.id):
+                continue
+            if normalized[a.id] == normalized[b.id]:
+                continue
+            if a.sender != b.sender:
+                continue
+            close_in_time = _date_close(a.sent_at, b.sent_at)
+            if not close_in_time:
+                continue
+            keyword_overlap = _keyword_overlap(a.subject, b.subject)
+            if keyword_overlap >= 0.12:
+                dsu.union(a.id, b.id)
+                joined_by_keyword.add(frozenset([a.id, b.id]))
+
     groups = []
     for member_ids in dsu.groups().values():
         members = [m for m in ok if m.id in member_ids]
@@ -474,6 +531,8 @@ def _group_messages(messages: list) -> list:
             basis, confidence = "reference", "exact"
         elif any(frozenset((a.id, b.id)) in joined_by_hash for a in members for b in members):
             basis, confidence = "duplicate_hash", "exact"
+        elif any(frozenset((a.id, b.id)) in joined_by_keyword for a in members for b in members):
+            basis, confidence = "keyword_overlap", "conservative"
         else:
             basis, confidence = "subject_participants_time", "conservative"
         note = next((uncertainty_notes[m.id] for m in members if m.id in uncertainty_notes), None)
@@ -498,9 +557,9 @@ def _group_messages(messages: list) -> list:
     return groups
 
 def run_ingest(emails_dir: str, db_path: str) -> dict:
-    # Glob both .msg and .eml files
-    msg_paths = sorted(Path(emails_dir).glob("*.msg"))
-    eml_paths = sorted(Path(emails_dir).glob("*.eml"))
+    # Glob both .msg and .eml files (recursive)
+    msg_paths = sorted(Path(emails_dir).glob("**/*.msg"))
+    eml_paths = sorted(Path(emails_dir).glob("**/*.eml"))
     paths = sorted(msg_paths + eml_paths)
 
     conn = store.connect(db_path)
