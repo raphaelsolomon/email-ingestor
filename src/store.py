@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS segment (
 CREATE TABLE IF NOT EXISTS judgement (
     id TEXT PRIMARY KEY,
     thread_id TEXT NOT NULL REFERENCES thread(id),
+    topic TEXT,
     priority INTEGER,
     reason TEXT,
     uncertainty TEXT,
@@ -101,6 +102,12 @@ def connect(db_path: str) -> sqlite3.Connection:
     except:
         conn.execute("ALTER TABLE correction ADD COLUMN error_category TEXT CHECK (error_category IN ('wrongly_classified','other'))")
         conn.execute("ALTER TABLE correction ADD COLUMN semantic_summary TEXT")
+        conn.commit()
+    # Migration: add topic field to judgement if it doesn't exist
+    try:
+        conn.execute("SELECT topic FROM judgement LIMIT 1")
+    except:
+        conn.execute("ALTER TABLE judgement ADD COLUMN topic TEXT")
         conn.commit()
     return conn
 
@@ -211,9 +218,9 @@ def get_segment(conn, segment_id):
 
 def insert_judgement(conn, row: dict):
     conn.execute(
-        """INSERT INTO judgement (id, thread_id, priority, reason, uncertainty, review_status, stale, who, what,
+        """INSERT INTO judgement (id, thread_id, topic, priority, reason, uncertainty, review_status, stale, who, what,
              why, action, deadline, model_name, created_at)
-           VALUES (:id, :thread_id, :priority, :reason, :uncertainty, :review_status, :stale, :who, :what, :why,
+           VALUES (:id, :thread_id, :topic, :priority, :reason, :uncertainty, :review_status, :stale, :who, :what, :why,
              :action, :deadline, :model_name, :created_at)""",
         row,
     )

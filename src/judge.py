@@ -135,7 +135,7 @@ def _is_past(deadline_text: str) -> bool:
     except (ValueError, TypeError):
         return False
 
-def validate_and_store(conn, thread_id: str, draft: dict, ref_map: dict, model_name: str) -> str:
+def validate_and_store(conn, thread_id: str, draft: dict, ref_map: dict, model_name: str, topic: str = None) -> str:
     evidence = _validate_evidence(conn, ref_map, draft.get("evidence"))
     by_field = {}
     for e in evidence:
@@ -180,7 +180,7 @@ def validate_and_store(conn, thread_id: str, draft: dict, ref_map: dict, model_n
     now_iso = datetime.now(timezone.utc).isoformat()
     judgement_id = hashlib.sha1(f"{thread_id}:{now_iso}".encode()).hexdigest()
     store.insert_judgement(conn, {
-        "id": judgement_id, "thread_id": thread_id, "priority": priority, "reason": reason,
+        "id": judgement_id, "thread_id": thread_id, "topic": topic, "priority": priority, "reason": reason,
         "uncertainty": "; ".join(uncertainty_notes) if uncertainty_notes else None,
         "review_status": review_status, "stale": int(stale), "who": who, "what": what, "why": why,
         "action": action, "deadline": deadline, "model_name": model_name,
@@ -206,8 +206,9 @@ def run_judge(db_path: str, model: str) -> dict:
         if store.latest_judgement_for_thread(conn, thread["id"]) is not None:
             continue
         packet, ref_map = build_packet(conn, thread["id"])
+        topic = llm_client.generate_topic(packet, model)
         draft = llm_client.judge_thread(packet, model)
-        validate_and_store(conn, thread["id"], draft, ref_map, model)
+        validate_and_store(conn, thread["id"], draft, ref_map, model, topic)
         judged += 1
     conn.commit()
     return {"judged": judged, "skipped_unreadable": skipped}

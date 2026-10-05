@@ -48,6 +48,11 @@ JUDGEMENT_TOOL_SCHEMA = {
     },
 }
 
+TOPIC_PROMPT = """You are analyzing an email thread for an executive triage system. Generate a short, one-line \
+summary of the thread's topic. Be concise and specific (e.g., "Q4 fabric samples request", "Invoice payment dispute", \
+"Board meeting scheduled"). Do not include who, what, why details - just the topic itself. Reply with only the \
+one-liner topic, nothing else."""
+
 SYSTEM_PROMPT = """You are the Judge component of an executive email triage system for Yarns & Colors Co., Ltd. \
 The executive is Jacky. You receive one already-grouped thread (a business matter that may span several source \
 messages) and return a single draft judgement.
@@ -91,6 +96,17 @@ def _client() -> anthropic.Client:
         raise RuntimeError("ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL must be set in .env")
     
     return anthropic.Client(api_key=api_key, base_url=base_url)
+
+def generate_topic(packet: dict, model: str = os.getenv("ANTHROPIC_MODEL")) -> str:
+    client = _client()
+    response = client.messages.create(
+        model=model,
+        max_tokens=200,
+        system=TOPIC_PROMPT,
+        messages=[{"role": "user", "content": json.dumps(packet, ensure_ascii=False, indent=2)}],
+    )
+    topic = response.content[0].text.strip()
+    return topic
 
 def judge_thread(packet: dict, model: str = os.getenv("ANTHROPIC_MODEL")) -> dict:
     client = _client()
