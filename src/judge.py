@@ -213,7 +213,12 @@ def run_judge(db_path: str, model: str) -> dict:
     return {"judged": judged, "skipped_unreadable": skipped}
 
 if __name__ == "__main__":
-    db_path = str(Path(__file__).resolve().parent.parent / "data" / "mailing.db")
-    model = os.getenv("ANTHROPIC_MODEL")
+    import sys
+    if len(sys.argv) >= 2:
+        db_path = sys.argv[1]
+        model = sys.argv[2] if len(sys.argv) >= 3 else os.getenv("ANTHROPIC_MODEL")
+    else:
+        db_path = str(Path(__file__).resolve().parent.parent / "data" / "mailing.db")
+        model = os.getenv("ANTHROPIC_MODEL")
     result = run_judge(db_path, model)
     print(result)
