@@ -89,14 +89,25 @@ business event but do not change that Jacky must act on the original timeline. E
 by 5pm" (msg_1) followed by clarifying questions (msg_2, msg_3) still requires a 5pm response, even if the \
 clarifications are unresolved.
 
-Only produce alert fields when priority is 1 or 2:
-- P1 alerts: who needs to act, what must be done immediately, why it's a crisis, action steps, hard deadline
-- P2 alerts: who owns the decision, what approval/reply is needed, why it matters, action steps, today's deadline
-For P3 or P4, set alert to null - no alert prose needed.
+Only produce alert fields when priority is 1 or 2. For P3 or P4, set alert to null.
 
-For alerts: "why" must be either a quoted consequence, or a reasoned inference that still cites the quotes it draws on.
-Do not invent consequences. Deadline should only be filled when the thread states a specific time; otherwise leave it null.
-If you cannot find evidence for all alert fields (who, what, why, action, deadline), mark as needs_evidence and omit alert.
+Alert field requirements for P1/P2:
+- "what" (MANDATORY): The specific action or decision. Examples:
+  * "Halt dye house production immediately and submit wastewater rectification plan"
+  * "Approve 400-tonne cotton purchase at USD 1.92/kg by 17:00 today"
+  * "Decide whether to pay EUR 8,700 for air freight of dye lot 7741 by 15:00 today"
+  * NOT just "Production stopped" or "Decision needed" - be specific about what action
+- "who" (REQUIRED for P1/P2): Who must act (Jacky, team, external party)
+- "why" (REQUIRED for P1/P2): Quoted consequence or reasoned inference (cite your quotes)
+- "action" (OPTIONAL): Next specific steps if not already in "what"
+- "deadline" (OPTIONAL): Specific time if stated; otherwise null
+
+Examples of GOOD alerts:
+- P1: what="Respond to customer cancellation threat by 10:00 UK tomorrow", why="USD 186k order at risk", who="Jacky"
+- P2: what="Approve PO-26-0457 cotton purchase by 16:00 today", why="Saves USD 52k, above Lily's limit", who="Jacky"
+
+If the email lacks a clear decision/action to take (no "what"), mark as P3 Reference instead.
+If priority is 1 or 2 but you cannot extract both "what" and "who", mark as needs_evidence and omit alert.
 
 Judge the thread as of its own latest message's sent date, not as of today - a March thread is not urgent just \
 because it is being reviewed later.
