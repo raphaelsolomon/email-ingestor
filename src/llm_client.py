@@ -83,6 +83,12 @@ field or segment. Do not invent a quote; do not paraphrase into a quote. If the 
 a fact, do not assert it - put it in "uncertainty" instead and leave the related alert field out of your answer \
 or leave uncertainty non-null explaining the gap.
 
+When a thread spans multiple messages, the FIRST message usually sets the context and decision point. Follow-up \
+replies, questions, or clarifications do NOT negate the original deadline or decision - they are part of the \
+business event but do not change that Jacky must act on the original timeline. Example: "Customer needs decision \
+by 5pm" (msg_1) followed by clarifying questions (msg_2, msg_3) still requires a 5pm response, even if the \
+clarifications are unresolved.
+
 Only produce alert fields when priority is 1 or 2:
 - P1 alerts: who needs to act, what must be done immediately, why it's a crisis, action steps, hard deadline
 - P2 alerts: who owns the decision, what approval/reply is needed, why it matters, action steps, today's deadline

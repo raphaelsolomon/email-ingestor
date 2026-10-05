@@ -167,7 +167,8 @@ def validate_and_store(conn, thread_id: str, draft: dict, ref_map: dict, model_n
                 fields[f] = alert.get(f)
             else:
                 uncertainty_notes.append(f"{f} has no surviving evidence")
-        if len(fields) < len(required):
+        # Alert is confirmed if it has 'what' (the core decision/action). Other fields enhance but aren't required.
+        if not fields.get("what"):
             review_status = "needs_evidence"
         who, what, why, action = fields.get("who"), fields.get("what"), fields.get("why"), fields.get("action")
 
