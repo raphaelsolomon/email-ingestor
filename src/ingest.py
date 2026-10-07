@@ -20,6 +20,20 @@ if sys.platform == "win32":
 # into the name constant so it visisble and tunable 
 SUBJECT_MATCH_WINDOW_DAYS = 14
 
+# The keyword pass is the weakest grouping signal (different subjects, no reply headers), so it
+# gets a tighter window than the exact-subject pass. Related "follow-up" emails arrive within days;
+# two unrelated emails from the same sender in a fortnight sharing a word is just a busy inbox.
+KEYWORD_MATCH_WINDOW_DAYS = 7
+
+# Words so common in business email that sharing one says nothing about being the same matter
+# ("Payment approval" vs "Payment terms"). Excluded from keyword overlap on top of the stop words.
+GENERIC_SUBJECT_TERMS = {
+    'order', 'orders', 'shipment', 'shipping', 'delivery', 'payment', 'invoice', 'quote', 'quotation',
+    'update', 'updates', 'meeting', 'request', 'confirmation', 'confirm', 'report', 'document',
+    'documents', 'attached', 'attachment', 'follow', 'review', 'approval', 'approve', 'schedule',
+    'information', 'info', 'regarding', 'details', 'price', 'prices',
+}
+
 # Reply/Forward Prefix to strip before comparing subjects, across every language this corpus supports
 # Ignorecase only affect latin
 # Letters (RE, FW, FWD, R, I) - it has no effect on the CJK characters which dont have case to ignore
@@ -421,7 +435,7 @@ def _extract_keywords(subject: str) -> set:
             # Apply synonym normalization
             w_final = synonyms.get(w_clean, w_clean)
             words.add(w_final)
-    return words - stop_words
+    return words - stop_words - GENERIC_SUBJECT_TERMS
 
 def _keyword_overlap(subj_a: str, subj_b: str) -> float:
     """Calculate keyword overlap ratio (0-1) between two subjects"""
@@ -433,7 +447,7 @@ def _keyword_overlap(subj_a: str, subj_b: str) -> float:
     total = keywords_a | keywords_b
     return len(overlap) / len(total) if total else 0.0
 
-def _date_close(a_iso: str | None, b_iso: str | None) -> bool:
+def _date_close(a_iso: str | None, b_iso: str | None, window_days: int = SUBJECT_MATCH_WINDOW_DAYS) -> bool:
     """
         Check if two dates are close enough to be considered the same day
     """
@@ -444,7 +458,7 @@ def _date_close(a_iso: str | None, b_iso: str | None) -> bool:
         b = datetime.fromisoformat(b_iso)
     except ValueError:
         return False
-    return abs(a - b) <= timedelta(days=SUBJECT_MATCH_WINDOW_DAYS)
+    return abs(a - b) <= timedelta(days=window_days)
 
 def _group_messages(messages: list) -> list:
     """
@@ -504,7 +518,7 @@ def _group_messages(messages: list) -> list:
                     uncertainty_notes[a.id] = f"same normalized subject as {b.filename} nut not merged ({reason})"
                     uncertainty_notes[b.id] = f"same normalized subject as {a.filename} nut not merged ({reason})"
 
-    joined_by_keyword = set()
+    joined_by_keyword: dict = {}  # frozenset({a, b}) -> shared keywords, surfaced as the thread's uncertainty
     for i in range(len(ok)):
         for j in range(i+1, len(ok)):
             a, b = ok[i], ok[j]
@@ -514,13 +528,13 @@ def _group_messages(messages: list) -> list:
                 continue
             if a.sender != b.sender:
                 continue
-            close_in_time = _date_close(a.sent_at, b.sent_at)
+            close_in_time = _date_close(a.sent_at, b.sent_at, KEYWORD_MATCH_WINDOW_DAYS)
             if not close_in_time:
                 continue
             keyword_overlap = _keyword_overlap(a.subject, b.subject)
             if keyword_overlap >= 0.12:
                 dsu.union(a.id, b.id)
-                joined_by_keyword.add(frozenset([a.id, b.id]))
+                joined_by_keyword[frozenset([a.id, b.id])] = sorted(_extract_keywords(a.subject) & _extract_keywords(b.subject))
 
     groups = []
     for member_ids in dsu.groups().values():
@@ -536,6 +550,10 @@ def _group_messages(messages: list) -> list:
         else:
             basis, confidence = "subject_participants_time", "conservative"
         note = next((uncertainty_notes[m.id] for m in members if m.id in uncertainty_notes), None)
+        if basis == "keyword_overlap":
+            shared = sorted({w for pair, words in joined_by_keyword.items() if pair <= set(member_ids) for w in words})
+            keyword_note = f"grouped only by shared subject keywords ({', '.join(shared)}); no reply headers"
+            note = f"{note}; {keyword_note}" if note else keyword_note
         groups.append({
             "message_ids": [m.id for m in members],
             "filenames": [m.filename for m in members],
