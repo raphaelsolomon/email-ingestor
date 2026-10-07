@@ -27,6 +27,7 @@ import streamlit as st
 import ingest
 import judge
 import store
+import reset
 
 FALLBACK_EMAILS_DIR = PROJECT_ROOT / "Emails"
 FALLBACK_DB_PATH = str(PROJECT_ROOT / "data" / "mailing.db")
@@ -336,6 +337,28 @@ def render_upload(conn):
             key="run_judge_btn",
             on_click=_do_judge,
         )
+
+    with st.expander("⚠️ System Reset (admin only)"):
+        st.write("**Warning:** This will permanently delete all records and start fresh.")
+        items_to_delete, total_size = reset.preview_deletion()
+
+        if not items_to_delete:
+            st.info("✓ System already clean - nothing to delete")
+        else:
+            st.write(f"**Items to delete ({total_size:.2f} MB):**")
+            for category, path, size_mb in items_to_delete:
+                st.caption(f"- [{category}] {path} ({size_mb:.2f} MB)")
+
+            if st.checkbox("I understand this cannot be undone", key="reset_confirm_checkbox"):
+                if st.button("🗑️ Permanently Delete All Records", key="reset_btn", type="secondary"):
+                    try:
+                        deleted_items = reset.perform_reset(dry_run=False)
+                        st.session_state["toast_success"] = f"✓ System reset successfully. Deleted {len(deleted_items)} item(s)."
+                        get_conn.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.session_state["toast_error"] = f"Reset failed: {type(e).__name__}: {e}"
+                        st.rerun()
 
 
 def _render_pending_toasts() -> None:
