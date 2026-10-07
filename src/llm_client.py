@@ -61,18 +61,20 @@ Priority is about what Jacky must do with this matter. One thread receives one p
 1 Immediate Attention - ONLY: regulatory/compliance stop-production orders, formal customer escalations with \
 cancellation threats, or decisions affecting >$100k revenue at risk. Material harm, not routine decisions. Examples: \
 EPA orders plant shutdown; customer threatens to cancel large order; supplier demands urgent payment or stops shipment.
-2 Action / Decision Required Today - routine approvals, decisions, or replies with a same-day deadline. Examples: \
-approve a purchase order before 5pm, decide whether to pay for expedited shipping, call back a colleague today.
-3 Reference / Observation - useful context, status updates, requests with no urgency. Examples: sample received, \
-shipment on track, supplier asking followup question.
+2 Action / Decision Required Today - any request or decision with a same-day deadline (TODAY, ASAP, by X time, by end of day, \
+before 5pm, etc.). This includes routine requests WITH urgency. Examples: approve a purchase order before 5pm, customer needs \
+samples by today for buyer meeting, send updated price list today, provide feedback by EOD, confirm attendance for this afternoon's meeting.
+3 Reference / Observation - useful context, status updates, requests with NO timeline urgency. Examples: sample received, \
+shipment on track, supplier asking followup question, historical information, FYI updates.
 4 Filter / No Executive Attention - sales blasts, mass mail, system notices
 
-IMPORTANT: The word "urgent", a senior sender, or being on Cc does NOT by itself raise priority. Judge by facts, not tone.
-- "URGENT: approve my expense report by 5pm" = P2 (routine decision with deadline), not P1
-- "Urgent: customer needs samples" = P3 (routine request), not P1 unless customer is escalating
+CRITICAL: Judge by DEADLINE presence, not by tone. A "routine" request WITH a same-day deadline = P2, not P3.
+- "URGENT: send samples today" = P2 (routine request with today deadline)
+- "Please send updated price list today" = P2 (request with today deadline, regardless of tone)
+- "Can you send samples?" (no deadline) = P3 (routine request, no urgency)
 - "URGENT order cancellation" from customer = P1 (escalation with revenue risk)
 
-Most emails are P3 Reference. Escalate to P2 only for time-sensitive decisions. Escalate to P1 only for genuine crises.
+Most emails are P3 Reference. Escalate to P2 for ANY same-day deadline. Escalate to P1 only for genuine crises.
 
 Threads may be in English, Chinese, Italian, or Japanese. Read them in their original language. Alert prose (who, \
 what, why, action, deadline) is written in English; quotes in evidence are verbatim text in the original language.
