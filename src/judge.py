@@ -160,15 +160,22 @@ def validate_and_store(conn, thread_id: str, draft: dict, ref_map: dict, model_n
     stale = False
 
     if priority in (1, 2) and alert:
-        required = ["who", "what", "why", "action"]
+        required = ["who", "what", "why"]
+        optional = ["action"]  # Action often redundant with 'what'
         fields = {}
         for f in required:
             if by_field.get(f):
                 fields[f] = alert.get(f)
             else:
                 uncertainty_notes.append(f"{f} has no surviving evidence")
-        # Alert is confirmed if it has 'what' (the core decision/action). Other fields enhance but aren't required.
-        if not fields.get("what"):
+        for f in optional:
+            if by_field.get(f):
+                fields[f] = alert.get(f)
+            # Don't mark as uncertain if optional fields are missing
+
+        # Alert is confirmed if it has all required fields: who, what, why
+        # Action is often redundant with 'what' and doesn't need separate evidence
+        if not (fields.get("who") and fields.get("what") and fields.get("why")):
             review_status = "needs_evidence"
         who, what, why, action = fields.get("who"), fields.get("what"), fields.get("why"), fields.get("action")
 
