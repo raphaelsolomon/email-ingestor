@@ -246,9 +246,19 @@ def queue_rows(conn):
 
         valid_priorities = [e["priority"] for e in all_effective if e["priority"] is not None and e["priority"] > 0]
         if not valid_priorities:
+            # Only mark as uncertain if ALL judgements have NULL priority (truly unclassified)
+            has_uncertain = any(j["priority"] is None for j in all_judgements)
+            if has_uncertain:
+                rows["uncertain"].append({
+                    "topic": topic,
+                    "threads": topic_threads,
+                    "max_priority": None,
+                    "has_uncertain": True,
+                })
             continue
         max_priority = min(valid_priorities)
-        has_uncertain = any(j["review_status"] == "needs_evidence" for j in all_judgements)
+        # "Uncertain" only if priority is NULL, not just because evidence is missing
+        has_uncertain = any(j["priority"] is None for j in all_judgements)
 
         topic_entry = {
             "topic": topic,
@@ -439,7 +449,9 @@ def render_queue(conn):
 
                 st.write(f"**{len(topic_entry['threads'])} thread(s):**")
                 for t in topic_entry["threads"]:
-                    if st.button(t["subject"], key=f"q_{t['thread']['id']}"):
+                    # Add badge if this thread needs evidence confirmation
+                    badge = " [⚠️ Needs Evidence]" if t["judgement"]["review_status"] == "needs_evidence" else ""
+                    if st.button(t["subject"] + badge, key=f"q_{t['thread']['id']}"):
                         st.session_state.selected_thread_id = t["thread"]["id"]
                         st.rerun()
 
