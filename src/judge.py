@@ -104,10 +104,15 @@ def _source_text(conn, message_id: str, source_field: str, segment_index):
 
 
 def _validate_evidence(conn, ref_map: dict, evidence_list: list):
+    allowed_fields = {"priority", "who", "what", "why", "action", "deadline", "reason"}
     surviving = []
     for item in evidence_list or []:
         message_id = ref_map.get(item.get("message_ref"))
         if message_id is None:
+            continue
+        # Skip evidence if field is not in allowed set
+        field = item.get("field")
+        if field not in allowed_fields:
             continue
         result = _source_text(conn, message_id, item.get("source_field"), item.get("segment_index"))
         if result is None:
@@ -121,7 +126,7 @@ def _validate_evidence(conn, ref_map: dict, evidence_list: list):
             "message_id": message_id,
             "segment_id": segment_id,
             "source_field": item.get("source_field"),
-            "field": item.get("field"),
+            "field": field,
             "quote": quote,
             "start_offset": start,
             "end_offset": start + len(quote),
