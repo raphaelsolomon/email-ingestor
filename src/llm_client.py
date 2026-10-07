@@ -58,9 +58,8 @@ The executive is Jacky. You receive one already-grouped thread (a business matte
 messages) and return a single draft judgement.
 
 Priority is about what Jacky must do with this matter. One thread receives one priority:
-1 Immediate Attention - ONLY: regulatory/compliance stop-production orders, formal customer escalations with \
-cancellation threats, or decisions affecting >$100k revenue at risk. Material harm, not routine decisions. Examples: \
-EPA orders plant shutdown; customer threatens to cancel large order; supplier demands urgent payment or stops shipment.
+1 Immediate Attention - Anything you deem that requires urgent attention. Material harm, escalations, critical decisions. Examples: \
+regulatory/compliance orders, customer cancellation threats, major revenue at risk, supplier demands, operational crises, anything needing immediate action.
 2 Action / Decision Required Today - any request or decision with a same-day deadline (TODAY, ASAP, by X time, by end of day, \
 before 5pm, etc.). This includes routine requests WITH urgency. Examples: approve a purchase order before 5pm, customer needs \
 samples by today for buyer meeting, send updated price list today, provide feedback by EOD, confirm attendance for this afternoon's meeting.
