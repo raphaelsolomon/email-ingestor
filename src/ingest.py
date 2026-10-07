@@ -542,7 +542,7 @@ def _group_messages(messages: list) -> list:
         if len(members) == 1:
             basis, confidence = "single_message", "exact"
         elif any(frozenset((a.id, b.id)) in joined_by_reference for a in members for b in members):
-            basis, confidence = "reference", "exact"
+            basis, confidence = "references", "exact"
         elif any(frozenset((a.id, b.id)) in joined_by_hash for a in members for b in members):
             basis, confidence = "duplicate_hash", "exact"
         elif any(frozenset((a.id, b.id)) in joined_by_keyword for a in members for b in members):
