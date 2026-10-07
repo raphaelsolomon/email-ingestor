@@ -465,9 +465,9 @@ def _group_messages(messages: list) -> list:
         linked_ids = ([m.in_reply_to] if m.in_reply_to else []) + m.references
         for ref in linked_ids:
             target = by_msgid.get(ref)
-            if target is not None and target.id != m.id and (m.id, target.id) not in joined_by_reference:
+            if target is not None and target.id != m.id:
                 dsu.union(m.id, target.id)
-                joined_by_reference.add((m.id, target.id))
+                joined_by_reference.add(frozenset([m.id, target.id]))
     
     by_hash: dict = {}
     for m in ok:
