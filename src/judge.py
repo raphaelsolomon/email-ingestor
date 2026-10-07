@@ -14,7 +14,9 @@ import store
 
 
 
-REVIEW_DATE = "2026-09-30"
+# "Today" for the judgement. Defaults to the real date; set REVIEW_DATE=YYYY-MM-DD in .env
+# to pin it when replaying a fixed test corpus.
+REVIEW_DATE = os.getenv("REVIEW_DATE") or datetime.now().date().isoformat()
 
 
 def _addr_list(json_text: str | None) -> list:
@@ -41,7 +43,7 @@ def build_packet(conn, thread_id: str) -> tuple:
             "attachments": json.loads(m["attachments"]) if m["attachments"] else [],
             "segments": [
                 {
-                    "idx": s["id"], "author": s["author"], "sent_at_text": s["sent_at_text"],
+                    "idx": s["idx"], "author": s["author"], "sent_at_text": s["sent_at_text"],
                     "subject": s["subject"], "body": s["body"],
                 }
                 for s in segments
@@ -135,8 +137,10 @@ def _validate_evidence(conn, ref_map: dict, evidence_list: list):
 
 def _is_past(deadline_text: str) -> bool:
     try:
-        parsed = dateparser.parse(deadline_text, fuzzy=True)
-        return parsed.date() < datetime.fromisoformat(REVIEW_DATE).date()
+        review_day = datetime.fromisoformat(REVIEW_DATE)
+        # default= makes partial dates ("today 15:00", "Friday") resolve against the review date, not the system clock
+        parsed = dateparser.parse(deadline_text, fuzzy=True, default=review_day)
+        return parsed.date() < review_day.date()
     except (ValueError, TypeError):
         return False
 
@@ -216,6 +220,7 @@ def validate_and_store(conn, thread_id: str, draft: dict, ref_map: dict, model_n
 def run_judge(db_path: str, model: str) -> dict:
     conn = store.connect(db_path)
     judged, skipped = 0, 0
+    failed = []
     for thread in store.list_active_threads(conn):
         messages = store.list_messages_by_thread(conn, thread["id"])
 
@@ -224,13 +229,21 @@ def run_judge(db_path: str, model: str) -> dict:
             continue
         if store.latest_judgement_for_thread(conn, thread["id"]) is not None:
             continue
-        packet, ref_map = build_packet(conn, thread["id"])
-        topic = llm_client.generate_topic(packet, model)
-        draft = llm_client.judge_thread(packet, model)
-        validate_and_store(conn, thread["id"], draft, ref_map, model, topic)
-        judged += 1
-    conn.commit()
-    return {"judged": judged, "skipped_unreadable": skipped}
+        # One bad thread (LLM timeout, malformed output) must not discard the rest of the run:
+        # commit per thread, roll back only the thread that failed. Failed threads have no
+        # judgement stored, so the next run picks them up again.
+        try:
+            packet, ref_map = build_packet(conn, thread["id"])
+            topic = llm_client.generate_topic(packet, model)
+            draft = llm_client.judge_thread(packet, model)
+            validate_and_store(conn, thread["id"], draft, ref_map, model, topic)
+            conn.commit()
+            judged += 1
+        except Exception as e:
+            conn.rollback()
+            print(f"judge failed for thread {thread['id']}: {type(e).__name__}: {e}")
+            failed.append({"thread_id": thread["id"], "error": f"{type(e).__name__}: {e}"})
+    return {"judged": judged, "skipped_unreadable": skipped, "failed": len(failed), "failures": failed}
 
 if __name__ == "__main__":
     import sys
