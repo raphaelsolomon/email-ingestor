@@ -162,28 +162,34 @@ def validate_and_store(conn, thread_id: str, draft: dict, ref_map: dict, model_n
     if priority in (1, 2) and alert:
         required = ["who", "what", "why"]
         optional = ["action"]  # Action often redundant with 'what'
-        fields = {}
+
+        # Extract fields from alert regardless of evidence; track missing evidence separately
+        who = alert.get("who")
+        what = alert.get("what")
+        why = alert.get("why")
+        action = alert.get("action")
+
+        # Check for missing evidence on required fields
         for f in required:
-            if by_field.get(f):
-                fields[f] = alert.get(f)
-            else:
+            if not by_field.get(f):
                 uncertainty_notes.append(f"{f} has no surviving evidence")
+
+        # Optional fields: no uncertainty if missing, but extract if present
         for f in optional:
-            if by_field.get(f):
-                fields[f] = alert.get(f)
-            # Don't mark as uncertain if optional fields are missing
+            if not by_field.get(f) and alert.get(f):
+                # Field present in alert but no evidence: this is okay for optional fields
+                pass
 
-        # Alert is confirmed if it has all required fields: who, what, why
-        # Action is often redundant with 'what' and doesn't need separate evidence
-        if not (fields.get("who") and fields.get("what") and fields.get("why")):
+        # Alert is confirmed if we have all required fields AND their evidence
+        if not (who and what and why and by_field.get("who") and by_field.get("what") and by_field.get("why")):
             review_status = "needs_evidence"
-        who, what, why, action = fields.get("who"), fields.get("what"), fields.get("why"), fields.get("action")
 
-        if by_field.get("deadline") and alert.get("deadline"):
+        if alert.get("deadline"):
             deadline = alert["deadline"]
-            stale = _is_past(deadline)
-        elif alert.get("deadline"):
-            uncertainty_notes.append("deadline has no surviving evidence")
+            if by_field.get("deadline"):
+                stale = _is_past(deadline)
+            else:
+                uncertainty_notes.append("deadline has no surviving evidence")
 
     now_iso = datetime.now(timezone.utc).isoformat()
     judgement_id = hashlib.sha1(f"{thread_id}:{now_iso}".encode()).hexdigest()
